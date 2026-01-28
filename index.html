@@ -113,6 +113,22 @@
 
         #decoded-text { font-size: 32px; font-weight: 900; letter-spacing: 4px; margin: 0; color: var(--dark); min-height: 38px; }
         .error-msg { color: var(--red-500); font-size: 12px; text-align: center; margin-top: 10px; }
+
+        /* 暫存的複製訊息 */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
     </style>
 </head>
 <body>
@@ -162,6 +178,8 @@
             <p style="text-align:center; font-size:10px; color:var(--gray-400); margin-top:15px;">100% Offline Secured Technology</p>
         </div>
     </div>
+
+    <div id="toast" class="toast">Copied to Clipboard!</div>
 
     <script>
         /**
@@ -331,7 +349,7 @@
                 txt.style.fontSize = "32px";
             }
         }
-        
+
         // 複製功能的實作
         function copyResult() {
             const text = document.getElementById('decoded-text').innerText;
@@ -367,5 +385,4 @@
         });
     </script>
 </body>
-
 </html>
