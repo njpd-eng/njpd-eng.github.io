@@ -86,7 +86,9 @@
             font-weight: 800;
             text-transform: uppercase;
             cursor: pointer;
+            transition: opacity 0.2s;
         }
+        .role-badge:hover { opacity: 0.8; }
         .role-admin { background: #fee2e2; color: #ef4444; }
         .role-user { background: #dbeafe; color: #2563eb; }
 
@@ -107,11 +109,15 @@
             flex-direction: column;
             justify-content: center;
             transition: background 0.3s;
+            cursor: pointer;
         }
+        #result-display:hover { border-color: var(--primary); background: #f0f7ff; }
+        #result-display:active { transform: scale(0.98); }
         #result-display.success { background: #f0fdf4; border-color: #dcfce7; }
         #result-display.error { background: #fef2f2; border-color: #fecaca; }
 
         #decoded-text { font-size: 32px; font-weight: 900; letter-spacing: 4px; margin: 0; color: var(--dark); min-height: 38px; }
+        .copy-hint { font-size: 10px; color: var(--gray-400); margin-top: 5px; }
         .error-msg { color: var(--red-500); font-size: 12px; text-align: center; margin-top: 10px; }
 
         /* 暫存的複製訊息 */
@@ -170,8 +176,9 @@
                 <input type="text" maxlength="4" class="err-in" placeholder="0000" inputmode="text" autocomplete="off" spellcheck="false">
             </div>
             
-            <div id="result-display">
+            <div id="result-display" onclick="copyResult()">
                 <p id="decoded-text"></p>
+                <p class="copy-hint" id="copy-hint">Tap to copy</p>
             </div>
 
             <button onclick="decodeNow()" style="background:var(--dark); margin-top:20px;">Manual Refresh</button>
@@ -190,16 +197,6 @@
         let globalData = null;
         let userRole = null;
         let activeKey = null;
-
-        // SHA-256 Hash of the Encryption Key
-        const KEY_HASH = "6c638ee5690cb8062e563c87549ff0580d0d837f2b35c75ed125ba5000fbdeeb";
-
-        async function sha256(message) {
-            const msgBuffer = new TextEncoder().encode(message);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
 
         // Initialize: check if data is embedded
         window.onload = function() {
@@ -224,15 +221,7 @@
                 return;
             }
 
-            // 1. Verify Encryption Key Hash
-            const inputHash = await sha256(inputEncKey);
-            if (inputHash !== KEY_HASH) {
-                errEl.innerText = "Invalid Encryption Key.";
-                errEl.classList.remove('hidden');
-                return;
-            }
-
-            // 2. Try to decrypt rawFileContent using XOR
+            // 直接嘗試解密與 JSON 解析（不進行事前哈希雜湊比對）
             try {
                 const scrambled = decodeURIComponent(escape(atob(rawFileContent)));
                 let originalText = "";
@@ -240,15 +229,25 @@
                     originalText += String.fromCharCode(scrambled.charCodeAt(i) ^ inputEncKey.charCodeAt(i % inputEncKey.length));
                 }
                 const fixed = originalText.replace(/\}\s*"/g, '}, "').replace(/,\s*\}/g, '}');
+                
+                // 嘗試將解密後的內容轉為 JSON 物件
                 globalData = JSON.parse(fixed);
-                activeKey = inputEncKey;
+
+                // 檢查是否成功解析出 Account 欄位（確保解密確實成功且不是胡亂解析的亂碼）
+                if (!globalData || !globalData.Account) {
+                    throw new Error("Invalid structure");
+                }
+                
+                activeKey = inputEncKey; // 解密與結構驗證皆通過，儲存密鑰
             } catch(e) {
-                errEl.innerText = "Data decryption failed.";
+                // 抓取到任何解密或解析 JSON 的失敗，即代表金鑰不正確
+                errEl.innerText = "Invalid Encryption Key.";
                 errEl.classList.remove('hidden');
+                globalData = null;
                 return;
             }
 
-            // 3. Verify Account Password
+            // 驗證帳號密碼
             const accounts = globalData.Account;
             if(inputPwd === accounts.Admin) userRole = "Admin";
             else if(inputPwd === accounts.User) userRole = "User";
@@ -290,7 +289,7 @@
             ins.forEach((el, i) => {
                 el.oninput = () => {
                     el.value = el.value.toUpperCase();
-                    decodeNow();
+                    decodeNow(); // 每輸入一個字就解碼
                     if(el.value.length >= 4 && i < 3) ins[i+1].focus();
                 };
                 el.onkeydown = (e) => {
@@ -303,6 +302,7 @@
 
         function decodeNow() {
             if(!globalData || !userRole) return;
+
             const prefix = currentType === "Notifier" ? "n" : "j";
             const ins = document.querySelectorAll('.err-in');
             let out = "";
@@ -313,7 +313,7 @@
                 const val = el.value.trim().toUpperCase();
                 if(!val) return;
                 hasAnyInput = true;
-                
+
                 const alpha = globalData[`database_${prefix}${i+1}_alphabet`] || {};
                 const num = globalData[`database_${prefix}${i+1}_number`] || {};
 
@@ -350,12 +350,11 @@
             }
         }
 
-        // 複製功能的實作
+        // 複製功能實作
         function copyResult() {
             const text = document.getElementById('decoded-text').innerText;
             if(!text || text === "Password contains English Letters") return;
 
-            // 建立隱藏的 textarea 進行複製
             const textArea = document.createElement("textarea");
             textArea.value = text;
             document.body.appendChild(textArea);
